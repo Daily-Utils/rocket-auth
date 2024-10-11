@@ -4,8 +4,9 @@ mod schema;
 mod controllers;
 
 use crate::utils::connect_sql::establish_connection;
-use crate::controllers::tenant::tenant::create_tenant;
+use crate::controllers::tenant:: refresh_tenant_key::refresh_tenant;
 use crate::controllers::client::client::create_client;
+use controllers::tenant::tenant::create_tenant;
 use rocket::{get, routes, launch};
 
 #[get("/")]
@@ -16,5 +17,5 @@ fn hello() -> String {
 #[launch]
 async fn rocket() -> _ {
     establish_connection().await;
-    rocket::build().mount("/", routes![hello, create_tenant, create_client])
+    rocket::build().mount("/", routes![hello, create_tenant, create_client, refresh_tenant])
 }

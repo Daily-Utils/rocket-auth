@@ -4,8 +4,8 @@ use crate::schema::client::dsl::client;
 use crate::schema::user::dsl::user;
 
 #[derive(Queryable, Associations, Identifiable)]
-#[belongs_to(user)]
-#[belongs_to(client)]
+#[diesel(belongs_to(user))]
+#[diesel(belongs_to(client))]
 #[diesel(table_name=access_token)]
 pub struct AccessToken {
     pub id: String,

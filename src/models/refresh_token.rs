@@ -17,7 +17,7 @@ pub struct RefreshToken {
 }
 
 #[derive(Insertable)]
-#[table_name = "refresh_token"]
+#[diesel(table_name=refresh_token)]
 pub struct NewRefreshToken<'a> {
     pub id: &'a str,
     pub user_id: &'a str,
