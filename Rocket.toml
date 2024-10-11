@@ -8,9 +8,12 @@ cli_colors = true
 
 [debug]
 port = 8888
+workers = 8
 
 [nyc]
 port = 8001
+workers = 10
 
 [release]
 port = 9999
+workers = 16

@@ -31,7 +31,7 @@ pub struct CreateClientResponse {
 pub async fn create_client(
     new_client_create: Json<NewClientCreate<'_>>,
 ) -> Json<CreateClientResponse> {
-    let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await;
+    let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
 
     let tenant_exists: Result<Tenant, diesel::result::Error> = tenant
         .filter(id.eq(new_client_create.tenant_id))
