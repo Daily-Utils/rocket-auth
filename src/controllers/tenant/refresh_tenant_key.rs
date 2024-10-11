@@ -26,6 +26,8 @@ pub struct RefreshTenantKeyResponse {
 pub async fn refresh_tenant<'a>(
     refresh_token: Json<RefreshRequest<'a>>,
 ) -> Json<RefreshTenantKeyResponse> {
+    let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
+
     let key: Result<String, String> = env::var("ENCRYPTION_KEY").map_err(|e| {
         error!("Error: {}", e);
         "Encryption key must be set".to_string()
@@ -37,16 +39,17 @@ pub async fn refresh_tenant<'a>(
 
     let client_query: Result<crate::models::client::Client, _> = client
         .filter(crate::schema::client::dsl::id.eq(decrypted_text.unwrap()))
-        .first::<crate::models::client::Client>(&mut establish_connection().await)
-        .await;
+        .first::<crate::models::client::Client>(connection)
+        .await
+        .map_err(|e| {
+            error!("Error saving new client: {}", e);
+            "Error saving new client".to_string()
+        });
 
     match client_query {
         Ok(client_query) => {
-            let encrypted_text: String = encrypt(
-                client_query.tenant_id.as_str(),
-                key_str.as_str(),
-                16,
-            );
+            let encrypted_text: String =
+                encrypt(client_query.tenant_id.as_str(), key_str.as_str(), 16);
 
             Json(RefreshTenantKeyResponse {
                 action: "Tenant key refreshed".to_string(),

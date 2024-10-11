@@ -21,6 +21,7 @@ pub struct CreateTenantResponse {
 
 #[post("/createTenant", data = "<new_tenant_create>")]
 pub async fn create_tenant(new_tenant_create: Json<NewTenantCreate<'_>>) -> Json<CreateTenantResponse> {
+    let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
 
     let size: Result<String, String> = env::var("SIZE_LEN_LIMIT_STR").map_err(|e|{
         error!("Error: {}", e);
@@ -36,7 +37,7 @@ pub async fn create_tenant(new_tenant_create: Json<NewTenantCreate<'_>>) -> Json
 
     let insert_result = diesel::insert_into(tenant)
         .values(new_tenant)
-        .execute(&mut establish_connection().await)
+        .execute(connection)
         .await
         .map_err(|e| {
             error!("Error saving new tenant: {}", e);
