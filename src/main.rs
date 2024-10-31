@@ -2,7 +2,7 @@ mod controllers;
 mod models;
 mod schema;
 mod utils;
-pub mod test;
+mod test;
 
 use crate::controllers::client::create_client::create_client;
 use crate::controllers::tenant::refresh_tenant_key::refresh_tenant;
