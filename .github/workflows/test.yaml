@@ -21,5 +21,13 @@ jobs:
       - name: Install dependencies and build
         run: cargo build --verbose
 
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Run tests
         run: cargo test --verbose
