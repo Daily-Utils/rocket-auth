@@ -76,7 +76,7 @@ pub async fn create_client(
                 }
             }
 
-            let key: Result<String, String> = env::var("ENCRYPTION_KEY").map_err(|e| {
+            let key: Result<String, String> = env::var("CLIENT_ENCRYPTION_KEY").map_err(|e| {
                 error!("Error: {}", e);
                 "Encryption key must be set".to_string()
             });
