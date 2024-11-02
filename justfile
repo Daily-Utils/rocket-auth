@@ -38,6 +38,12 @@ start-everything-prod:
     sleep 5
     just start-prod
 
+generate-migration:
+    @echo "Generating migration"
+    just start-db
+    sleep 5
+    diesel migration run
+
 watch:
     @echo "Starting live reload..."
     cargo watch -x 'run'

@@ -37,7 +37,7 @@ pub async fn create_user(
 
     match tenant_exists {
         Ok(_) => {
-            let size: Result<String, String> = env::var("SIZE_LEN_LIMIT_STR").map_err(|e| {
+            let size: Result<String, String> = env::var("ID_SIZE").map_err(|e| {
                 error!("Error: {}", e);
                 "Size must be set".to_string()
             });
