@@ -23,7 +23,7 @@ pub struct CreateTenantResponse {
 pub async fn create_tenant(new_tenant_create: Json<NewTenantCreate<'_>>) -> Json<CreateTenantResponse> {
     let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
 
-    let size: Result<String, String> = env::var("SIZE_LEN_LIMIT_STR").map_err(|e|{
+    let size: Result<String, String> = env::var("ID_SIZE").map_err(|e|{
         error!("Error: {}", e);
         "Size must be set".to_string()
     });
