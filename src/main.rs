@@ -13,7 +13,7 @@ use rocket::{get, launch, routes};
 
 #[get("/")]
 fn hello() -> String {
-    format!("Server is runningsss!!!!!")
+    format!("Server is running!!!!!")
 }
 
 #[launch]

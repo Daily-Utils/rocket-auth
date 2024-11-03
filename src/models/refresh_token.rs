@@ -22,5 +22,6 @@ pub struct NewRefreshToken<'a> {
     pub id: &'a str,
     pub user_id: &'a str,
     pub client_id: &'a str,
-    pub token: &'a str
+    pub token: &'a str,
+    pub expires_at: chrono::NaiveDateTime
 }
