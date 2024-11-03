@@ -1,5 +1,6 @@
+use crate::models::user::User;
 use crate::schema::tenant::dsl::{id, tenant};
-use crate::schema::user::dsl::user;
+use crate::schema::user::dsl::{user, tenant_id, email, user_name};
 use crate::utils::connect_sql::establish_connection;
 use crate::utils::generate_short_hash::encrypt;
 use crate::utils::generate_random_hash::generate_random_hash_function;
@@ -30,6 +31,7 @@ pub async fn create_user(
 ) -> Json<CreateUserResponse> {
     let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
 
+    // Check if the tenant exists
     let tenant_exists: Result<Tenant, diesel::result::Error> = tenant
         .filter(id.eq(new_user_create.tenant_id))
         .first(connection)
@@ -59,22 +61,43 @@ pub async fn create_user(
                 password: &password_hash,
             };
 
-            let insert_result = diesel::insert_into(user)
-                .values(&new_user)
-                .execute(connection)
-                .await
-                .map_err(|e| {
-                    error!("Error saving new user: {}", e);
-                    "Error saving new user".to_string()
-                });
+            let user_exists: Result<User, diesel::result::Error> = user
+                .filter(tenant_id.eq(new_user_create.tenant_id))
+                .filter(user_name.eq(new_user_create.user_name))
+                .filter(email.eq(new_user_create.email))
+                .first(connection)
+                .await;
 
-            match insert_result {
-                Ok(_) => Json(CreateUserResponse {
-                    action: "User created successfully!".to_string(),
-                }),
-                Err(e) => Json(CreateUserResponse {
-                    action: e,
-                }),
+            match user_exists {
+                Ok(_) => {
+                    Json(CreateUserResponse {
+                        action: "User already exists!".to_string(),
+                    })
+                }
+                Err(diesel::result::Error::NotFound) => {
+                    let insert_result = diesel::insert_into(user)
+                        .values(&new_user)
+                        .execute(connection)
+                        .await
+                        .map_err(|e| {
+                            error!("Error saving new user: {}", e);
+                            "Error saving new user".to_string()
+                        });
+
+                    match insert_result {
+                        Ok(_) => Json(CreateUserResponse {
+                            action: "User created successfully!".to_string(),
+                        }),
+                        Err(e) => Json(CreateUserResponse {
+                            action: e,
+                        }),
+                    }
+                }
+                Err(e) => {
+                    Json(CreateUserResponse {
+                        action: format!("Error checking user existence: {}", e),
+                    })
+                }
             }
         }
         Err(e) => Json(CreateUserResponse {
