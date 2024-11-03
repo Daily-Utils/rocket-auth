@@ -25,6 +25,8 @@ COPY --from=build /build/Rocket.toml ./Rocket.toml
 COPY --from=build /build/static ./static
 COPY --from=build /build/templates ./templates
 
+RUN touch .env
+
 ENV ROCKET_ADDRESS=0.0.0.0
 ENV ROCKET_PORT=8080
 

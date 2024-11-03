@@ -1,4 +1,4 @@
-pub mod tenant;
 pub mod client;
+pub mod signin;
 pub mod signup;
-mod signin;
+pub mod tenant;

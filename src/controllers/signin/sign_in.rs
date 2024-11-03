@@ -1,7 +1,6 @@
-use crate::models::access_token::{self, NewAccessToken};
+use crate::models::access_token::NewAccessToken;
 use crate::models::refresh_token::NewRefreshToken;
 use crate::models::user::User;
-use crate::schema::client::dsl::{client, id};
 use crate::schema::user::dsl::{email, user};
 use crate::utils::connect_sql::establish_connection;
 use crate::utils::generate_random_hash::generate_random_hash_function;
@@ -14,9 +13,12 @@ use rocket::post;
 use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
 use std::env;
+use super::checks::{
+    check_access_token_exists, check_and_update_refresh_token, check_client_exists, check_pass,
+};
 
-use super::checks::{check_access_token_exists, check_and_update_refresh_token, check_client_exists};
 use super::generate_token::generate_token;
+
 #[derive(Deserialize)]
 
 pub struct SignInUser<'a> {
@@ -35,6 +37,11 @@ pub struct SignInResponse {
 pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInResponse> {
     let mut conn: diesel_async::AsyncMysqlConnection = establish_connection().await.unwrap();
 
+    let user_key = env::var("USER_ENCRYPTION_KEY").map_err(|e| {
+        error!("Error: {}", e);
+        "Encryption key must be set".to_string()
+    });
+
     let user_exists: Result<User, _> = user
         .filter(email.eq(sign_in_user.email))
         .first::<User>(&mut conn)
@@ -42,6 +49,28 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
 
     match user_exists {
         Ok(user_taken) => {
+            let pass_match = check_pass(
+                sign_in_user.password,
+                &user_taken.password,
+                &user_key.clone().unwrap(),
+            );
+
+            match pass_match {
+                Ok(true) => (),
+                Ok(false) => {
+                    return Json(SignInResponse {
+                        action: "Password does not match".to_string(),
+                        access_token: "".to_string(),
+                    });
+                }
+                Err(e) => {
+                    return Json(SignInResponse {
+                        action: e.to_string(),
+                        access_token: "".to_string(),
+                    });
+                }
+            }
+
             let client_exists = check_client_exists(sign_in_user.client_id, &mut conn).await;
 
             match client_exists {
@@ -60,21 +89,13 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
                 }
             }
 
-            let exp_access_token: chrono::DateTime<Utc> = Utc::now() + Duration::hours(1);
+            let exp_access_token: chrono::DateTime<Utc> = Utc::now() + Duration::hours(4);
             let exp_refresh_token: chrono::DateTime<Utc> = Utc::now() + Duration::days(14);
-            let key: Result<String, String> = env::var("USER_ENCRYPTION_KEY").map_err(|e| {
-                error!("Error: {}", e);
-                "Encryption key must be set".to_string()
-            });
             let size: Result<String, String> = env::var("ID_SIZE").map_err(|e| {
                 error!("Error: {}", e);
                 "Size must be set".to_string()
             });
             let secret: Result<String, String> = env::var("ROCKET_SECRET").map_err(|e| {
-                error!("Error: {}", e);
-                "Encryption key must be set".to_string()
-            });
-            let user_key = env::var("USER_ENCRYPTION_KEY").map_err(|e| {
                 error!("Error: {}", e);
                 "Encryption key must be set".to_string()
             });
@@ -95,11 +116,13 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
                         &user_taken.tenant_id,
                         exp_refresh_token.timestamp() as usize,
                         &user_key.unwrap(),
-                    ).await;
+                    )
+                    .await;
 
                     match result_check_and_refresh_update {
                         Ok(_) => (),
                         Err(e) => {
+                            println!("Error checking and updating refresh token: {}", e);
                             return Json(SignInResponse {
                                 action: e.to_string(),
                                 access_token: "".to_string(),
@@ -117,7 +140,7 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
 
                     let update_access_token = diesel::update(crate::schema::access_token::table)
                         .filter(
-                            crate::schema::access_token::id.eq(&present_access_token.unwrap().id),
+                            crate::schema::access_token::id.eq(&present_access_token.id),
                         )
                         .set((
                             crate::schema::access_token::token.eq(&access_token),
@@ -175,7 +198,7 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             let rand_hash_refresh_token: String =
                 generate_random_hash_function(size.unwrap().parse().unwrap());
 
-            let refresh_token_hash: String = encrypt(&refresh_token, &key.unwrap(), 16);
+            let refresh_token_hash: String = encrypt(&refresh_token, &user_key.unwrap(), 16);
 
             let new_access_token: NewAccessToken = NewAccessToken {
                 id: &rand_hash_access_token,
@@ -236,9 +259,9 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
                 access_token,
             });
         }
-        Err(_) => {
+        Err(e) => {
             return Json(SignInResponse {
-                action: "Sign In Failed".to_string(),
+                action: e.to_string(),
                 access_token: "".to_string(),
             });
         }

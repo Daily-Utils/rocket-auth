@@ -8,8 +8,8 @@ use crate::schema::client::dsl::{client, id};
 use crate::schema::refresh_token::dsl::{
     client_id as refresh_token_client_id, refresh_token, user_id as refresh_token_user_id,
 };
-use crate::utils::generate_short_hash::encrypt;
-use chrono::Utc;
+use crate::utils::generate_short_hash::{decrypt, encrypt};
+use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel::result::Error;
 use diesel_async::RunQueryDsl;
@@ -20,7 +20,7 @@ pub async fn check_access_token_exists(
     provided_client_id: &str,
     provided_user_id: &str,
     conn: &mut diesel_async::AsyncMysqlConnection,
-) -> Result<Option<AccessToken>, Error> {
+) -> Result<AccessToken, Error> {
     let access_token_exists = access_token
         .filter(access_token_client_id.eq(provided_client_id))
         .filter(access_token_user_id.eq(provided_user_id))
@@ -28,8 +28,7 @@ pub async fn check_access_token_exists(
         .await;
 
     match access_token_exists {
-        Ok(token) => Ok(Some(token)),
-        Err(diesel::result::Error::NotFound) => Ok(None),
+        Ok(token) => Ok(token),
         Err(e) => Err(e.into()),
     }
 }
@@ -79,9 +78,15 @@ pub async fn check_and_update_refresh_token(
             let encrypted_token = encrypt(&new_refresh_token, encrypt_key, 16);
 
             let current: chrono::NaiveDateTime = Utc::now().naive_utc();
-            if current > token.expires_at {
+            let one_day_before_expiration = token.expires_at - Duration::days(1);
+            let current_plus_14_days = current + Duration::days(14);
+
+            if current > one_day_before_expiration {
                 diesel::update(refresh_token.find(token.id))
-                    .set(crate::schema::refresh_token::dsl::token.eq(encrypted_token))
+                    .set((
+                        crate::schema::refresh_token::dsl::token.eq(encrypted_token),
+                        crate::schema::refresh_token::dsl::expires_at.eq(current_plus_14_days),
+                    ))
                     .execute(conn)
                     .await?;
             }
@@ -89,5 +94,19 @@ pub async fn check_and_update_refresh_token(
             Ok(())
         }
         Err(e) => Err(e),
+    }
+}
+
+pub fn check_pass(
+    provided_password: &str,
+    database_password: &str,
+    key: &str,
+) -> Result<bool, Error> {
+    let decrypted_password = decrypt(database_password, key);
+
+    if decrypted_password.unwrap() == provided_password {
+        Ok(true)
+    } else {
+        Ok(false)
     }
 }
