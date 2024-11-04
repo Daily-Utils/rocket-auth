@@ -1,7 +1,10 @@
+use super::checks::{check_and_process_tokens, check_client_exists, check_pass};
+use super::generate_token::generate_token;
 use crate::models::access_token::NewAccessToken;
 use crate::models::refresh_token::NewRefreshToken;
 use crate::models::user::User;
 use crate::schema::user::dsl::{email, user};
+use crate::utils::config::AppConfig;
 use crate::utils::connect_sql::establish_connection;
 use crate::utils::generate_random_hash::generate_random_hash_function;
 use crate::utils::generate_short_hash::encrypt;
@@ -12,11 +15,6 @@ use rocket::error;
 use rocket::post;
 use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
-use std::env;
-use super::checks::{
-    check_and_process_tokens, check_client_exists, check_pass,
-};
-use super::generate_token::generate_token;
 
 #[derive(Deserialize)]
 
@@ -34,20 +32,16 @@ pub struct SignInResponse {
 
 #[post("/signin", data = "<sign_in_user>")]
 pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInResponse> {
+    let required_vars = vec!["USER_ENCRYPTION_KEY", "ID_SIZE", "ROCKET_SECRET"];
+    if !AppConfig::check_vars(required_vars) {
+        panic!("Required environment variables are not set");
+    }
+
     let mut conn: diesel_async::AsyncMysqlConnection = establish_connection().await.unwrap();
 
-    let user_key = env::var("USER_ENCRYPTION_KEY").map_err(|e| {
-        error!("Error: {}", e);
-        "Encryption key must be set".to_string()
-    });
-    let size: Result<String, String> = env::var("ID_SIZE").map_err(|e| {
-        error!("Error: {}", e);
-        "Size must be set".to_string()
-    });
-    let secret: Result<String, String> = env::var("ROCKET_SECRET").map_err(|e| {
-        error!("Error: {}", e);
-        "Encryption key must be set".to_string()
-    });
+    let user_key = AppConfig::get_var("USER_ENCRYPTION_KEY");
+    let size = AppConfig::get_var("ID_SIZE");
+    let secret = AppConfig::get_var("ROCKET_SECRET");
 
     let user_exists: Result<User, _> = user
         .filter(email.eq(sign_in_user.email))
@@ -59,7 +53,7 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             let pass_match = check_pass(
                 sign_in_user.password,
                 &user_taken.password,
-                &user_key.clone().unwrap(),
+                &user_key.clone(),
             );
 
             match pass_match {
@@ -101,8 +95,8 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
 
             let access_token_exists_proccessed = check_and_process_tokens(
                 &mut conn,
-                &secret.clone().unwrap(),
-                &user_key.clone().unwrap(),
+                &secret.clone(),
+                &user_key.clone(),
                 sign_in_user.client_id,
                 &user_taken.id,
                 &user_taken.email,
@@ -122,7 +116,7 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
                 }
             }
 
-            let secret_str: &String = secret.as_ref().unwrap();
+            let secret_str: &String = &secret;
 
             let access_token: String = generate_token(
                 secret_str,
@@ -141,12 +135,12 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             );
 
             let rand_hash_access_token: String =
-                generate_random_hash_function(size.clone().unwrap().parse().unwrap());
+                generate_random_hash_function(size.clone().parse().unwrap());
 
             let rand_hash_refresh_token: String =
-                generate_random_hash_function(size.unwrap().parse().unwrap());
+                generate_random_hash_function(size.parse().unwrap());
 
-            let refresh_token_hash: String = encrypt(&refresh_token, &user_key.unwrap(), 16);
+            let refresh_token_hash: String = encrypt(&refresh_token, &user_key, 16);
 
             let new_access_token: NewAccessToken = NewAccessToken {
                 id: &rand_hash_access_token,
@@ -173,15 +167,6 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
                     "Error saving new access token".to_string()
                 });
 
-            let insert_refresh_token = diesel::insert_into(crate::schema::refresh_token::table)
-                .values(&new_refresh_token)
-                .execute(&mut conn)
-                .await
-                .map_err(|e| {
-                    error!("Error saving new refresh token: {}", e);
-                    "Error saving new refresh token".to_string()
-                });
-
             match insert_access_token {
                 Ok(_) => (),
                 Err(e) => {
@@ -191,6 +176,15 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
                     })
                 }
             }
+
+            let insert_refresh_token = diesel::insert_into(crate::schema::refresh_token::table)
+                .values(&new_refresh_token)
+                .execute(&mut conn)
+                .await
+                .map_err(|e| {
+                    error!("Error saving new refresh token: {}", e);
+                    "Error saving new refresh token".to_string()
+                });
 
             match insert_refresh_token {
                 Ok(_) => (),

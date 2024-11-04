@@ -1,0 +1,45 @@
+services:
+  db:
+    image: mysql:9.0.1
+    restart: always
+    environment:
+      MYSQL_DATABASE: "db"
+      MYSQL_USER: "rocket"
+      MYSQL_PASSWORD: "rocpassword"
+      MYSQL_ROOT_PASSWORD: "rootpassword"
+      MYSQL_ROOT_USER: "roc"
+    ports:
+      - "11034:3306"
+    expose:
+      - "3306"
+    volumes:
+      - my-db-prod:/var/lib/mysql
+    networks:
+      - rocker-network
+
+  rocker-auth:
+    build:
+      context: .
+      dockerfile: dockerfile
+    restart: always
+    ports:
+      - "8888:8888"
+    expose:
+      - "8888"
+    environment:
+      ROCKET_SECRET: ${ROCKET_SECRET}
+      DATABASE_URL: mysql://rocket:rocpassword@db:3306/db
+      ID_SIZE: ${ID_SIZE}
+      CLIENT_ENCRYPTION_KEY: ${CLIENT_ENCRYPTION_KEY}
+      USER_ENCRYPTION_KEY: ${USER_ENCRYPTION_KEY}
+    depends_on:
+      - db
+    networks:
+      - rocker-network
+
+networks:
+  rocker-network:
+    driver: bridge
+
+volumes:
+  my-db-prod:

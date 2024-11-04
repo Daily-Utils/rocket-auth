@@ -1,6 +1,5 @@
 use std::env;
 use dotenvy::dotenv;
-use std::collections::HashMap;
 
 pub trait Config {
     fn load_env();
@@ -15,10 +14,6 @@ impl Config for AppConfig {
 }
 
 impl AppConfig {
-    pub fn get_env_vars() -> HashMap<String, String> {
-        env::vars().collect()
-    }
-
     pub fn check_vars(str_vec: Vec<&str>) -> bool {
         let mut result = true;
         for var in str_vec {
@@ -28,5 +23,9 @@ impl AppConfig {
             }
         }
         result
+    }
+
+    pub fn get_var(var: &str) -> String {
+        env::var(var).unwrap()
     }
 }

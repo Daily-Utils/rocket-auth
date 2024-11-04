@@ -1,5 +1,6 @@
 use crate::schema::client::dsl::client;
 use crate::schema::tenant::dsl::{id, tenant};
+use crate::utils::config::AppConfig;
 use crate::utils::generate_random_hash::generate_random_hash_function;
 use crate::utils::generate_short_hash::encrypt;
 use crate::{
@@ -11,7 +12,6 @@ use diesel_async::RunQueryDsl;
 use rocket::error;
 use rocket::post;
 use rocket::serde::json::Json;
-use std::env;
 
 #[derive(serde::Deserialize)]
 pub struct NewClientCreate<'a> {
@@ -31,7 +31,13 @@ pub struct CreateClientResponse {
 pub async fn create_client(
     new_client_create: Json<NewClientCreate<'_>>,
 ) -> Json<CreateClientResponse> {
-    let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
+    let required_vars = vec!["ID_SIZE", "CLIENT_ENCRYPTION_KEY"];
+    if !AppConfig::check_vars(required_vars) {
+        panic!("Required environment variables are not set");
+    }
+
+    let connection: &mut diesel_async::AsyncMysqlConnection =
+        &mut establish_connection().await.unwrap();
 
     let tenant_exists: Result<Tenant, diesel::result::Error> = tenant
         .filter(id.eq(new_client_create.tenant_id))
@@ -40,14 +46,8 @@ pub async fn create_client(
 
     match tenant_exists {
         Ok(_) => {
-            let size: Result<String, String> = env::var("ID_SIZE").map_err(|e| {
-                error!("Error: {}", e);
-                "Size must be set".to_string()
-            });
-
-            let rand_hash: String = generate_random_hash_function(size.unwrap().parse().unwrap());
-
-            print!("rand_hash: {}", rand_hash);
+            let size = AppConfig::get_var("ID_SIZE");
+            let rand_hash: String = generate_random_hash_function(size.parse().unwrap());
 
             let new_client: NewClient<'_> = NewClient {
                 id: rand_hash.as_str(),
@@ -76,12 +76,9 @@ pub async fn create_client(
                 }
             }
 
-            let key: Result<String, String> = env::var("CLIENT_ENCRYPTION_KEY").map_err(|e| {
-                error!("Error: {}", e);
-                "Encryption key must be set".to_string()
-            });
+            let key = AppConfig::get_var("CLIENT_ENCRYPTION_KEY");
 
-            let encrypted_text: String = encrypt(rand_hash.as_str(), key.unwrap().as_str(), 16);
+            let encrypted_text: String = encrypt(rand_hash.as_str(), key.as_str(), 16);
 
             Json(CreateClientResponse {
                 action: "Created Client successfully!".to_string(),

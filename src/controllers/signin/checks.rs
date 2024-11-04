@@ -28,7 +28,7 @@ pub async fn check_and_process_tokens(
     exp_access_token: usize,
     exp_refresh_token: usize,
 ) -> Result<bool, Error> {
-    let access_token_exists = access_token
+    let access_token_exists: Result<AccessToken, _> = access_token
         .filter(access_token_client_id.eq(provided_client_id_for_process))
         .filter(access_token_user_id.eq(provided_user_id_for_process))
         .first::<AccessToken>(conn)

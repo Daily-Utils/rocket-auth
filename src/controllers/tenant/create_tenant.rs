@@ -1,12 +1,12 @@
-use rocket::post;
-use crate::{models::tenant::NewTenant, utils::connect_sql::establish_connection};
-use rocket::serde::json::Json;
 use crate::schema::tenant::dsl::tenant;
-use diesel_async::RunQueryDsl;
+use crate::utils::config::AppConfig;
 use crate::utils::generate_random_hash::generate_random_hash_function;
 use crate::utils::generate_short_hash::encrypt;
-use std::env;
+use crate::{models::tenant::NewTenant, utils::connect_sql::establish_connection};
+use diesel_async::RunQueryDsl;
 use rocket::error;
+use rocket::post;
+use rocket::serde::json::Json;
 
 #[derive(serde::Deserialize)]
 pub struct NewTenantCreate<'a> {
@@ -20,15 +20,20 @@ pub struct CreateTenantResponse {
 }
 
 #[post("/createTenant", data = "<new_tenant_create>")]
-pub async fn create_tenant(new_tenant_create: Json<NewTenantCreate<'_>>) -> Json<CreateTenantResponse> {
-    let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
+pub async fn create_tenant(
+    new_tenant_create: Json<NewTenantCreate<'_>>,
+) -> Json<CreateTenantResponse> {
+    let required_vars = vec!["ID_SIZE", "ENCRYPTION_KEY"];
+    if !AppConfig::check_vars(required_vars) {
+        panic!("Required environment variables are not set");
+    }
 
-    let size: Result<String, String> = env::var("ID_SIZE").map_err(|e|{
-        error!("Error: {}", e);
-        "Size must be set".to_string()
-    });
+    let connection: &mut diesel_async::AsyncMysqlConnection =
+        &mut establish_connection().await.unwrap();
 
-    let rand_hash: String = generate_random_hash_function(size.unwrap().parse().unwrap());
+    let size = AppConfig::get_var("ID_SIZE");
+
+    let rand_hash: String = generate_random_hash_function(size.parse().unwrap());
 
     let new_tenant: NewTenant<'_> = NewTenant {
         id: rand_hash.as_str(),
@@ -46,18 +51,17 @@ pub async fn create_tenant(new_tenant_create: Json<NewTenantCreate<'_>>) -> Json
 
     match insert_result {
         Ok(_) => (),
-        Err(e) => return Json(CreateTenantResponse {
-            action: e,
-            tenant_key: "".to_string(),
-        }),
+        Err(e) => {
+            return Json(CreateTenantResponse {
+                action: e,
+                tenant_key: "".to_string(),
+            })
+        }
     }
 
-    let key: Result<String, String> = env::var("ENCRYPTION_KEY").map_err(|e| {
-        error!("Error: {}", e);
-        "Encryption key must be set".to_string()
-    });
+    let key = AppConfig::get_var("ENCRYPTION_KEY");
 
-    let encrypted_text: String = encrypt(rand_hash.as_str(), key.unwrap().as_str(), 16);
+    let encrypted_text: String = encrypt(rand_hash.as_str(), key.as_str(), 16);
 
     Json(CreateTenantResponse {
         action: "Created Tenant successfully!".to_string(),

@@ -11,6 +11,8 @@ use crate::controllers::tenant::refresh_tenant_key::refresh_tenant;
 use crate::utils::connect_sql::establish_connection;
 use controllers::tenant::create_tenant::create_tenant;
 use rocket::{get, launch, routes};
+use utils::config::Config;
+use crate::utils::config::AppConfig;
 
 #[get("/")]
 fn hello() -> String {
@@ -19,6 +21,7 @@ fn hello() -> String {
 
 #[launch]
 async fn rocket() -> _ {
+    AppConfig::load_env();
     let _ = establish_connection().await.unwrap();
 
     let rocker_build: rocket::Rocket<rocket::Build> = rocket::build();
