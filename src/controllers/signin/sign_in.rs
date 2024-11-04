@@ -14,9 +14,8 @@ use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
 use std::env;
 use super::checks::{
-    check_access_token_exists, check_and_update_refresh_token, check_client_exists, check_pass,
+    check_and_process_tokens, check_client_exists, check_pass,
 };
-
 use super::generate_token::generate_token;
 
 #[derive(Deserialize)]
@@ -38,6 +37,14 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
     let mut conn: diesel_async::AsyncMysqlConnection = establish_connection().await.unwrap();
 
     let user_key = env::var("USER_ENCRYPTION_KEY").map_err(|e| {
+        error!("Error: {}", e);
+        "Encryption key must be set".to_string()
+    });
+    let size: Result<String, String> = env::var("ID_SIZE").map_err(|e| {
+        error!("Error: {}", e);
+        "Size must be set".to_string()
+    });
+    let secret: Result<String, String> = env::var("ROCKET_SECRET").map_err(|e| {
         error!("Error: {}", e);
         "Encryption key must be set".to_string()
     });
@@ -91,86 +98,27 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
 
             let exp_access_token: chrono::DateTime<Utc> = Utc::now() + Duration::hours(4);
             let exp_refresh_token: chrono::DateTime<Utc> = Utc::now() + Duration::days(14);
-            let size: Result<String, String> = env::var("ID_SIZE").map_err(|e| {
-                error!("Error: {}", e);
-                "Size must be set".to_string()
-            });
-            let secret: Result<String, String> = env::var("ROCKET_SECRET").map_err(|e| {
-                error!("Error: {}", e);
-                "Encryption key must be set".to_string()
-            });
 
-            let access_token_exists =
-                check_access_token_exists(sign_in_user.client_id, &user_taken.id, &mut conn).await;
+            let access_token_exists_proccessed = check_and_process_tokens(
+                &mut conn,
+                &secret.clone().unwrap(),
+                &user_key.clone().unwrap(),
+                sign_in_user.client_id,
+                &user_taken.id,
+                &user_taken.email,
+                &user_taken.tenant_id,
+                exp_access_token.timestamp() as usize,
+                exp_refresh_token.timestamp() as usize,
+            )
+            .await;
 
-            match access_token_exists {
-                Ok(present_access_token) => {
-                    let secret_str: &String = secret.as_ref().unwrap();
-
-                    let result_check_and_refresh_update = check_and_update_refresh_token(
-                        &sign_in_user.client_id,
-                        &user_taken.id,
-                        &mut conn,
-                        &secret_str,
-                        &user_taken.email,
-                        &user_taken.tenant_id,
-                        exp_refresh_token.timestamp() as usize,
-                        &user_key.unwrap(),
-                    )
-                    .await;
-
-                    match result_check_and_refresh_update {
-                        Ok(_) => (),
-                        Err(e) => {
-                            println!("Error checking and updating refresh token: {}", e);
-                            return Json(SignInResponse {
-                                action: e.to_string(),
-                                access_token: "".to_string(),
-                            })
-                        }
-                    }
-
-                    let access_token: String = generate_token(
-                        secret_str,
-                        &user_taken.id,
-                        &user_taken.email,
-                        &user_taken.tenant_id,
-                        exp_access_token.timestamp() as usize,
-                    );
-
-                    let update_access_token = diesel::update(crate::schema::access_token::table)
-                        .filter(
-                            crate::schema::access_token::id.eq(&present_access_token.id),
-                        )
-                        .set((
-                            crate::schema::access_token::token.eq(&access_token),
-                            crate::schema::access_token::expires_at
-                                .eq(exp_access_token.naive_utc()),
-                        ))
-                        .execute(&mut conn)
-                        .await
-                        .map_err(|e| {
-                            error!("Error updating access token: {}", e);
-                            "Error updating access token".to_string()
-                        });
-
-                    match update_access_token {
-                        Ok(_) => (),
-                        Err(e) => {
-                            return Json(SignInResponse {
-                                action: e,
-                                access_token: "".to_string(),
-                            })
-                        }
-                    }
-
+            match access_token_exists_proccessed {
+                Ok(_) => (),
+                Err(e) => {
                     return Json(SignInResponse {
-                        action: "Sign In".to_string(),
-                        access_token,
+                        action: e.to_string(),
+                        access_token: "".to_string(),
                     });
-                }
-                Err(_) => {
-                    println!("No access token found thus moving forward to create one!");
                 }
             }
 

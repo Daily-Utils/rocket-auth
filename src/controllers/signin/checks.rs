@@ -13,23 +13,80 @@ use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel::result::Error;
 use diesel_async::RunQueryDsl;
+use rocket::error;
 
 use super::generate_token::generate_token;
 
-pub async fn check_access_token_exists(
-    provided_client_id: &str,
-    provided_user_id: &str,
+pub async fn check_and_process_tokens(
     conn: &mut diesel_async::AsyncMysqlConnection,
-) -> Result<AccessToken, Error> {
+    secret_str: &str,
+    user_key: &str,
+    provided_client_id_for_process: &str,
+    provided_user_id_for_process: &str,
+    provided_tenant_id_for_process: &str,
+    provided_email_for_process: &str,
+    exp_access_token: usize,
+    exp_refresh_token: usize,
+) -> Result<bool, Error> {
     let access_token_exists = access_token
-        .filter(access_token_client_id.eq(provided_client_id))
-        .filter(access_token_user_id.eq(provided_user_id))
+        .filter(access_token_client_id.eq(provided_client_id_for_process))
+        .filter(access_token_user_id.eq(provided_user_id_for_process))
         .first::<AccessToken>(conn)
         .await;
 
     match access_token_exists {
-        Ok(token) => Ok(token),
-        Err(e) => Err(e.into()),
+        Ok(present_access_token) => {
+            let result_check_and_refresh_update = check_and_update_refresh_token(
+                &provided_client_id_for_process,
+                &provided_user_id_for_process,
+                conn,
+                &secret_str,
+                provided_email_for_process,
+                provided_tenant_id_for_process,
+                exp_refresh_token,
+                &user_key,
+            )
+            .await;
+
+            if let Err(e) = result_check_and_refresh_update {
+                return Err(e);
+            }
+
+            let new_access_token = generate_token(
+                secret_str,
+                &provided_user_id_for_process,
+                &provided_email_for_process,
+                &provided_tenant_id_for_process,
+                exp_access_token,
+            );
+
+            let current: chrono::NaiveDateTime = Utc::now().naive_utc();
+            let current_plus_4_hr = current + Duration::hours(4);
+
+            let update_access_token = diesel::update(crate::schema::access_token::table)
+                .filter(crate::schema::access_token::id.eq(&present_access_token.id))
+                .set((
+                    crate::schema::access_token::token.eq(&new_access_token),
+                    crate::schema::access_token::expires_at
+                        .eq(current_plus_4_hr),
+                ))
+                .execute(conn)
+                .await
+                .map_err(|e| {
+                    error!("Error updating access token: {}", e);
+                    e
+                });
+
+            if let Err(e) = update_access_token {
+                return Err(e);
+            }
+
+            return Ok(true);
+        }
+        Err(_) => {
+            println!("No access token found thus moving forward to create one!");
+            return Ok(true);
+        }
     }
 }
 
