@@ -1,4 +1,5 @@
 use crate::schema::client::dsl::client;
+use crate::utils::config::AppConfig;
 use crate::utils::connect_sql::establish_connection;
 use crate::utils::generate_short_hash::decrypt;
 use crate::utils::generate_short_hash::encrypt;
@@ -8,7 +9,6 @@ use diesel_async::RunQueryDsl;
 use rocket::error;
 use rocket::post;
 use rocket::serde::json::Json;
-use std::env;
 use std::error::Error;
 
 #[derive(serde::Deserialize)]
@@ -26,14 +26,17 @@ pub struct RefreshTenantKeyResponse {
 pub async fn refresh_tenant<'a>(
     refresh_token: Json<RefreshRequest<'a>>,
 ) -> Json<RefreshTenantKeyResponse> {
-    let connection: &mut diesel_async::AsyncMysqlConnection = &mut establish_connection().await.unwrap();
+    let required_vars = vec!["ENCRYPTION_KEY"];
+    if !AppConfig::check_vars(required_vars) {
+        panic!("Required environment variables are not set");
+    }
 
-    let key: Result<String, String> = env::var("ENCRYPTION_KEY").map_err(|e| {
-        error!("Error: {}", e);
-        "Encryption key must be set".to_string()
-    });
+    let connection: &mut diesel_async::AsyncMysqlConnection =
+        &mut establish_connection().await.unwrap();
 
-    let key_str: &String = key.as_ref().unwrap();
+    let key = AppConfig::get_var("ENCRYPTION_KEY");
+
+    let key_str: &String = &key;
     let decrypted_text: Result<String, Box<dyn Error>> =
         decrypt(refresh_token.client_key, key_str.as_str());
 
