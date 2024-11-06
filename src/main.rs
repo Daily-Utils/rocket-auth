@@ -1,8 +1,8 @@
 mod controllers;
 mod models;
 mod schema;
-mod test;
 mod utils;
+mod tests;
 
 use crate::controllers::client::create_client::create_client;
 use crate::controllers::signin::sign_in::sign_in;

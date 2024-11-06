@@ -1,19 +1,19 @@
-services:
-  db:
-    image: mysql:9.0.1
-    restart: always
-    environment:
-      MYSQL_DATABASE: 'db'
-      MYSQL_USER: 'rocket'
-      MYSQL_PASSWORD: 'rocpassword'
-      MYSQL_ROOT_PASSWORD: 'rootpassword'
-      MYSQL_ROOT_USER: 'roc'
-    ports:
-      - '11034:3306'
-    expose:
-      - '3306'
-    volumes:
-      - my-db:/var/lib/mysql
+  services:
+    db:
+      image: mysql:9.0.1
+      restart: always
+      environment:
+        MYSQL_DATABASE: 'db'
+        MYSQL_USER: 'rocket'
+        MYSQL_PASSWORD: 'rocpassword'
+        MYSQL_ROOT_PASSWORD: 'rootpassword'
+        MYSQL_ROOT_USER: 'roc'
+      ports:
+        - '11034:3306'
+      expose:
+        - '3306'
+      volumes:
+        - my-db:/var/lib/mysql
 
-volumes:
-  my-db:
+  volumes:
+    my-db:

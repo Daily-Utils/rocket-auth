@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::utils::generate_short_hash::{encrypt, decrypt};
 
     #[test]

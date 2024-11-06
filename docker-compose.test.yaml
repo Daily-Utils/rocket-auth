@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  test-db:
+    image: mysql:9.0.1
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'test_db'
+      MYSQL_USER: 'test_rocket'
+      MYSQL_PASSWORD: 'testpassword'
+      MYSQL_ROOT_PASSWORD: 'testrootpassword'
+    ports:
+      - '11035:3306'
+    expose:
+      - '3306'
+    volumes:
+      - test-db:/var/lib/mysql
+
+volumes:
+  test-db:

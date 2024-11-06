@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::utils::generate_random_hash::generate_random_hash_function;
 
     #[test]
