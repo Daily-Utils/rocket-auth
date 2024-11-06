@@ -7,11 +7,13 @@ use diesel::query_dsl::methods::FilterDsl;
 use diesel::ExpressionMethods;
 use diesel_async::RunQueryDsl;
 use rocket::error;
+use rocket::http::Status;
 use rocket::post;
+use rocket::response::status;
 use rocket::serde::json::Json;
 use std::error::Error;
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct RefreshRequest<'a> {
     client_key: &'a str,
 }
@@ -25,10 +27,13 @@ pub struct RefreshTenantKeyResponse {
 #[post("/refreshTenantKey", data = "<refresh_token>")]
 pub async fn refresh_tenant<'a>(
     refresh_token: Json<RefreshRequest<'a>>,
-) -> Json<RefreshTenantKeyResponse> {
+) -> Result<Json<RefreshTenantKeyResponse>, status::Custom<&str>> {
     let required_vars = vec!["ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
-        panic!("Required environment variables are not set");
+        return Err(status::Custom(
+            Status::InternalServerError,
+            "Required environment variable(s) are not set",
+        ));
     }
 
     let connection: &mut diesel_async::AsyncMysqlConnection =
@@ -54,14 +59,17 @@ pub async fn refresh_tenant<'a>(
             let encrypted_text: String =
                 encrypt(client_query.tenant_id.as_str(), key_str.as_str(), 16);
 
-            Json(RefreshTenantKeyResponse {
+            Ok(Json(RefreshTenantKeyResponse {
                 action: "Tenant key refreshed".to_string(),
                 tenant_key: encrypted_text,
-            })
+            }))
         }
-        Err(e) => Json(RefreshTenantKeyResponse {
-            action: e.to_string(),
-            tenant_key: "".to_string(),
-        }),
+        Err(e) => {
+            let error_message = format!("Error saving new client: {}", e);
+            Err(status::Custom(
+                Status::InternalServerError,
+                Box::leak(error_message.into_boxed_str()),
+            ))
+        }
     }
 }

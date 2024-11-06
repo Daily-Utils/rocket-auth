@@ -9,7 +9,9 @@ use crate::utils::generate_short_hash::encrypt;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use rocket::error;
+use rocket::http::Status;
 use rocket::post;
+use rocket::response::status;
 use rocket::serde::json::Json;
 #[derive(serde::Deserialize)]
 pub struct NewUserCreate<'a> {
@@ -25,10 +27,15 @@ pub struct CreateUserResponse {
 }
 
 #[post("/createUser", data = "<new_user_create>")]
-pub async fn create_user(new_user_create: Json<NewUserCreate<'_>>) -> Json<CreateUserResponse> {
+pub async fn create_user(
+    new_user_create: Json<NewUserCreate<'_>>,
+) -> Result<Json<CreateUserResponse>, status::Custom<&str>> {
     let required_vars = vec!["ID_SIZE", "USER_ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
-        panic!("Required environment variables are not set");
+        return Err(status::Custom(
+            Status::InternalServerError,
+            "Required environment variable(s) are not set",
+        ));
     }
 
     let connection: &mut diesel_async::AsyncMysqlConnection =
@@ -66,9 +73,9 @@ pub async fn create_user(new_user_create: Json<NewUserCreate<'_>>) -> Json<Creat
                 .await;
 
             match user_exists {
-                Ok(_) => Json(CreateUserResponse {
+                Ok(_) => Ok(Json(CreateUserResponse {
                     action: "User already exists!".to_string(),
-                }),
+                })),
                 Err(diesel::result::Error::NotFound) => {
                     let insert_result = diesel::insert_into(user)
                         .values(&new_user)
@@ -80,19 +87,33 @@ pub async fn create_user(new_user_create: Json<NewUserCreate<'_>>) -> Json<Creat
                         });
 
                     match insert_result {
-                        Ok(_) => Json(CreateUserResponse {
+                        Ok(_) => Ok(Json(CreateUserResponse {
                             action: "User created successfully!".to_string(),
-                        }),
-                        Err(e) => Json(CreateUserResponse { action: e }),
+                        })),
+                        Err(e) => {
+                            error!("Error saving new user: {}", e);
+                            Err(status::Custom(
+                                rocket::http::Status::InternalServerError,
+                                "Error saving new user",
+                            ))
+                        }
                     }
                 }
-                Err(e) => Json(CreateUserResponse {
-                    action: format!("Error checking user existence: {}", e),
-                }),
+                Err(e) => {
+                    error!("Error checking user existence: {}", e);
+                    Err(status::Custom(
+                        rocket::http::Status::InternalServerError,
+                        "Error checking user existence",
+                    ))
+                }
             }
         }
-        Err(e) => Json(CreateUserResponse {
-            action: format!("Error: Tenant does not exist: {}", e),
-        }),
+        Err(e) => {
+            error!("Error checking tenant existence: {}", e);
+            Err(status::Custom(
+                rocket::http::Status::NotFound,
+                "Error: Tenant does not exist",
+            ))
+        }
     }
 }
