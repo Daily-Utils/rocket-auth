@@ -12,7 +12,9 @@ use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use rocket::error;
+use rocket::http::Status;
 use rocket::post;
+use rocket::response::status;
 use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
 
@@ -31,10 +33,15 @@ pub struct SignInResponse {
 }
 
 #[post("/signin", data = "<sign_in_user>")]
-pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInResponse> {
+pub async fn sign_in<'a>(
+    sign_in_user: Json<SignInUser<'a>>,
+) -> Result<Json<SignInResponse>, status::Custom<&str>> {
     let required_vars = vec!["USER_ENCRYPTION_KEY", "ID_SIZE", "ROCKET_SECRET"];
     if !AppConfig::check_vars(required_vars) {
-        panic!("Required environment variables are not set");
+        return Err(status::Custom(
+            Status::InternalServerError,
+            "Required environment variable(s) are not set",
+        ));
     }
 
     let mut conn: diesel_async::AsyncMysqlConnection = establish_connection().await.unwrap();
@@ -59,16 +66,17 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             match pass_match {
                 Ok(true) => (),
                 Ok(false) => {
-                    return Json(SignInResponse {
+                    return Ok(Json(SignInResponse {
                         action: "Password does not match".to_string(),
                         access_token: "".to_string(),
-                    });
+                    }));
                 }
                 Err(e) => {
-                    return Json(SignInResponse {
-                        action: e.to_string(),
-                        access_token: "".to_string(),
-                    });
+                    error!("Error checking password: {}", e);
+                    return Err(status::Custom(
+                        rocket::http::Status::InternalServerError,
+                        "Error checking password",
+                    ));
                 }
             }
 
@@ -77,16 +85,17 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             match client_exists {
                 Ok(true) => (),
                 Ok(false) => {
-                    return Json(SignInResponse {
+                    return Ok(Json(SignInResponse {
                         action: "Client does not exist".to_string(),
                         access_token: "".to_string(),
-                    });
+                    }));
                 }
                 Err(_) => {
-                    return Json(SignInResponse {
-                        action: "Error checking client existence".to_string(),
-                        access_token: "".to_string(),
-                    });
+                    error!("Error checking client existence");
+                    return Err(status::Custom(
+                        rocket::http::Status::InternalServerError,
+                        "Error checking client existence",
+                    ));
                 }
             }
 
@@ -109,10 +118,11 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             match access_token_exists_proccessed {
                 Ok(_) => (),
                 Err(e) => {
-                    return Json(SignInResponse {
-                        action: e.to_string(),
-                        access_token: "".to_string(),
-                    });
+                    error!("Error checking access token existence: {}", e);
+                    return Err(status::Custom(
+                        rocket::http::Status::InternalServerError,
+                        "Error checking access token existence",
+                    ));
                 }
             }
 
@@ -170,10 +180,11 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             match insert_access_token {
                 Ok(_) => (),
                 Err(e) => {
-                    return Json(SignInResponse {
-                        action: e,
-                        access_token: "".to_string(),
-                    })
+                    error!("Error saving new access token: {}", e);
+                    return Err(status::Custom(
+                        rocket::http::Status::InternalServerError,
+                        "Error saving new access token",
+                    ));
                 }
             }
 
@@ -189,23 +200,25 @@ pub async fn sign_in<'a>(sign_in_user: Json<SignInUser<'a>>) -> Json<SignInRespo
             match insert_refresh_token {
                 Ok(_) => (),
                 Err(e) => {
-                    return Json(SignInResponse {
-                        action: e,
-                        access_token: "".to_string(),
-                    })
+                    error!("Error saving new refresh token: {}", e);
+                    return Err(status::Custom(
+                        rocket::http::Status::InternalServerError,
+                        "Error saving new refresh token",
+                    ));
                 }
             }
 
-            return Json(SignInResponse {
+            return Ok(Json(SignInResponse {
                 action: "Sign In".to_string(),
                 access_token,
-            });
+            }));
         }
         Err(e) => {
-            return Json(SignInResponse {
-                action: e.to_string(),
-                access_token: "".to_string(),
-            });
+            error!("Error checking user existence: {}", e);
+            return Err(status::Custom(
+                rocket::http::Status::InternalServerError,
+                "Error checking user existence",
+            ));
         }
     }
 }

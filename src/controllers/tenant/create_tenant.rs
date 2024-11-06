@@ -5,7 +5,9 @@ use crate::utils::generate_short_hash::encrypt;
 use crate::{models::tenant::NewTenant, utils::connect_sql::establish_connection};
 use diesel_async::RunQueryDsl;
 use rocket::error;
+use rocket::http::Status;
 use rocket::post;
+use rocket::response::status;
 use rocket::serde::json::Json;
 
 #[derive(serde::Deserialize)]
@@ -22,10 +24,13 @@ pub struct CreateTenantResponse {
 #[post("/createTenant", data = "<new_tenant_create>")]
 pub async fn create_tenant(
     new_tenant_create: Json<NewTenantCreate<'_>>,
-) -> Json<CreateTenantResponse> {
+) -> Result<Json<CreateTenantResponse>, status::Custom<&str>> {
     let required_vars = vec!["ID_SIZE", "ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
-        panic!("Required environment variables are not set");
+        return Err(status::Custom(
+            Status::InternalServerError,
+            "Required environment variable(s) are not set",
+        ));
     }
 
     let connection: &mut diesel_async::AsyncMysqlConnection =
@@ -52,10 +57,11 @@ pub async fn create_tenant(
     match insert_result {
         Ok(_) => (),
         Err(e) => {
-            return Json(CreateTenantResponse {
-                action: e,
-                tenant_key: "".to_string(),
-            })
+            error!("Error saving new tenant: {}", e);
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "Error saving new tenant",
+            ))
         }
     }
 
@@ -63,8 +69,8 @@ pub async fn create_tenant(
 
     let encrypted_text: String = encrypt(rand_hash.as_str(), key.as_str(), 16);
 
-    Json(CreateTenantResponse {
+    Ok(Json(CreateTenantResponse {
         action: "Created Tenant successfully!".to_string(),
         tenant_key: encrypted_text,
-    })
+    }))
 }

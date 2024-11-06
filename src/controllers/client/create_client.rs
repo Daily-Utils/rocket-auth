@@ -10,7 +10,9 @@ use crate::{
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use rocket::error;
+use rocket::http::Status;
 use rocket::post;
+use rocket::response::status;
 use rocket::serde::json::Json;
 
 #[derive(serde::Deserialize)]
@@ -30,10 +32,13 @@ pub struct CreateClientResponse {
 #[post("/createClient", data = "<new_client_create>")]
 pub async fn create_client(
     new_client_create: Json<NewClientCreate<'_>>,
-) -> Json<CreateClientResponse> {
+) -> Result<Json<CreateClientResponse>, status::Custom<&str>> {
     let required_vars = vec!["ID_SIZE", "CLIENT_ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
-        panic!("Required environment variables are not set");
+        return Err(status::Custom(
+            Status::InternalServerError,
+            "Required environment variable(s) are not set",
+        ));
     }
 
     let connection: &mut diesel_async::AsyncMysqlConnection =
@@ -69,10 +74,11 @@ pub async fn create_client(
             match insert_result {
                 Ok(_) => (),
                 Err(e) => {
-                    return Json(CreateClientResponse {
-                        action: e,
-                        tenant_key_refresher_hash: "".to_string(),
-                    })
+                    error!("Error saving new client: {}", e);
+                    return Err(status::Custom(
+                        Status::InternalServerError,
+                        "Error saving new client",
+                    ));
                 }
             }
 
@@ -80,16 +86,17 @@ pub async fn create_client(
 
             let encrypted_text: String = encrypt(rand_hash.as_str(), key.as_str(), 16);
 
-            Json(CreateClientResponse {
+            Ok(Json(CreateClientResponse {
                 action: "Created Client successfully!".to_string(),
                 tenant_key_refresher_hash: encrypted_text,
-            })
+            }))
         }
         Err(e) => {
-            return Json(CreateClientResponse {
-                action: format!("Error: Tenant does not exist: {}", e),
-                tenant_key_refresher_hash: "".to_string(),
-            })
+            error!("Error saving new client: {}", e);
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "Error saving new client",
+            ));
         }
     }
 }
