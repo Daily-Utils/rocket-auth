@@ -31,7 +31,10 @@ pub fn decrypt(encrypted_data: &str, key: &str) -> Result<String, Box<dyn Error>
 
     let decrypted_data: Vec<u8> = cipher.decrypt_vec(&data)?;
 
-    print!("decrypted_data: {:?}", String::from_utf8(decrypted_data.clone())?);
+    print!(
+        "decrypted_data: {:?}",
+        String::from_utf8(decrypted_data.clone())?
+    );
 
     Ok(String::from_utf8(decrypted_data)?)
 }

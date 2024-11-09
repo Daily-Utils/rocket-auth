@@ -1,3 +1,5 @@
+use super::models::RefreshRequest;
+use super::models::RefreshTenantKeyResponse;
 use crate::schema::client::dsl::client;
 use crate::utils::config::AppConfig;
 use crate::utils::connect_sql::establish_connection;
@@ -13,22 +15,15 @@ use rocket::response::status;
 use rocket::serde::json::Json;
 use std::error::Error;
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct RefreshRequest<'a> {
-    client_key: &'a str,
-}
-
-#[derive(serde::Serialize)]
-pub struct RefreshTenantKeyResponse {
-    action: String,
-    tenant_key: String,
-}
+// for the query
+use crate::models::client::Client;
+use crate::schema::client::dsl::id;
 
 #[post("/refreshTenantKey", data = "<refresh_token>")]
 pub async fn refresh_tenant<'a>(
     refresh_token: Json<RefreshRequest<'a>>,
 ) -> Result<Json<RefreshTenantKeyResponse>, status::Custom<&str>> {
-    let required_vars = vec!["ENCRYPTION_KEY"];
+    let required_vars = vec!["CLIENT_ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
         return Err(status::Custom(
             Status::InternalServerError,
@@ -39,15 +34,15 @@ pub async fn refresh_tenant<'a>(
     let connection: &mut diesel_async::AsyncMysqlConnection =
         &mut establish_connection().await.unwrap();
 
-    let key = AppConfig::get_var("ENCRYPTION_KEY");
+    let key: String = AppConfig::get_var("CLIENT_ENCRYPTION_KEY");
 
     let key_str: &String = &key;
     let decrypted_text: Result<String, Box<dyn Error>> =
         decrypt(refresh_token.client_key, key_str.as_str());
 
-    let client_query: Result<crate::models::client::Client, _> = client
-        .filter(crate::schema::client::dsl::id.eq(decrypted_text.unwrap()))
-        .first::<crate::models::client::Client>(connection)
+    let client_query: Result<Client, _> = client
+        .filter(id.eq(decrypted_text.unwrap()))
+        .first::<Client>(connection)
         .await
         .map_err(|e| {
             error!("Error saving new client: {}", e);

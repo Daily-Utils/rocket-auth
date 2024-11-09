@@ -1,3 +1,4 @@
+use super::models::{CreateClientResponse, NewClientCreate};
 use crate::schema::client::dsl::client;
 use crate::schema::tenant::dsl::{id, tenant};
 use crate::utils::config::AppConfig;
@@ -15,25 +16,11 @@ use rocket::post;
 use rocket::response::status;
 use rocket::serde::json::Json;
 
-#[derive(serde::Deserialize)]
-pub struct NewClientCreate<'a> {
-    name: &'a str,
-    tenant_id: &'a str,
-    client_secret: &'a str,
-    redirect_uri: &'a str,
-}
-
-#[derive(serde::Serialize)]
-pub struct CreateClientResponse {
-    action: String,
-    tenant_key_refresher_hash: String,
-}
-
 #[post("/createClient", data = "<new_client_create>")]
 pub async fn create_client(
     new_client_create: Json<NewClientCreate<'_>>,
 ) -> Result<Json<CreateClientResponse>, status::Custom<&str>> {
-    let required_vars = vec!["ID_SIZE", "CLIENT_ENCRYPTION_KEY"];
+    let required_vars: Vec<&str> = vec!["ID_SIZE", "CLIENT_ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
         return Err(status::Custom(
             Status::InternalServerError,
@@ -51,7 +38,7 @@ pub async fn create_client(
 
     match tenant_exists {
         Ok(_) => {
-            let size = AppConfig::get_var("ID_SIZE");
+            let size: String = AppConfig::get_var("ID_SIZE");
             let rand_hash: String = generate_random_hash_function(size.parse().unwrap());
 
             let new_client: NewClient<'_> = NewClient {
@@ -62,7 +49,7 @@ pub async fn create_client(
                 redirect_uri: new_client_create.redirect_uri,
             };
 
-            let insert_result = diesel::insert_into(client)
+            let insert_result: Result<usize, String> = diesel::insert_into(client)
                 .values(&new_client)
                 .execute(connection)
                 .await
@@ -82,7 +69,7 @@ pub async fn create_client(
                 }
             }
 
-            let key = AppConfig::get_var("CLIENT_ENCRYPTION_KEY");
+            let key: String = AppConfig::get_var("CLIENT_ENCRYPTION_KEY");
 
             let encrypted_text: String = encrypt(rand_hash.as_str(), key.as_str(), 16);
 
