@@ -1,3 +1,4 @@
+use super::models::{CreateTenantResponse, NewTenantCreate};
 use crate::schema::tenant::dsl::tenant;
 use crate::utils::config::AppConfig;
 use crate::utils::generate_random_hash::generate_random_hash_function;
@@ -10,22 +11,11 @@ use rocket::post;
 use rocket::response::status;
 use rocket::serde::json::Json;
 
-#[derive(serde::Deserialize)]
-pub struct NewTenantCreate<'a> {
-    name: &'a str,
-}
-
-#[derive(serde::Serialize)]
-pub struct CreateTenantResponse {
-    action: String,
-    tenant_key: String,
-}
-
 #[post("/createTenant", data = "<new_tenant_create>")]
 pub async fn create_tenant(
     new_tenant_create: Json<NewTenantCreate<'_>>,
 ) -> Result<Json<CreateTenantResponse>, status::Custom<&str>> {
-    let required_vars = vec!["ID_SIZE", "ENCRYPTION_KEY"];
+    let required_vars: Vec<&str> = vec!["ID_SIZE", "CLIENT_ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
         return Err(status::Custom(
             Status::InternalServerError,
@@ -36,7 +26,7 @@ pub async fn create_tenant(
     let connection: &mut diesel_async::AsyncMysqlConnection =
         &mut establish_connection().await.unwrap();
 
-    let size = AppConfig::get_var("ID_SIZE");
+    let size: String = AppConfig::get_var("ID_SIZE");
 
     let rand_hash: String = generate_random_hash_function(size.parse().unwrap());
 
@@ -45,7 +35,7 @@ pub async fn create_tenant(
         name: new_tenant_create.name,
     };
 
-    let insert_result = diesel::insert_into(tenant)
+    let insert_result: Result<usize, String> = diesel::insert_into(tenant)
         .values(new_tenant)
         .execute(connection)
         .await
@@ -61,11 +51,11 @@ pub async fn create_tenant(
             return Err(status::Custom(
                 Status::InternalServerError,
                 "Error saving new tenant",
-            ))
+            ));
         }
     }
 
-    let key = AppConfig::get_var("ENCRYPTION_KEY");
+    let key: String = AppConfig::get_var("CLIENT_ENCRYPTION_KEY");
 
     let encrypted_text: String = encrypt(rand_hash.as_str(), key.as_str(), 16);
 

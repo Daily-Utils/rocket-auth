@@ -1,6 +1,6 @@
-use diesel::prelude::*;
 use crate::schema::authorization_code;
 use crate::schema::client::dsl::client;
+use diesel::prelude::*;
 
 #[derive(Queryable, Identifiable, Associations, Debug)]
 #[diesel(belongs_to(client))]
@@ -20,5 +20,5 @@ pub struct NewAuthorizationCode<'a> {
     pub id: &'a str,
     pub client_id: &'a str,
     pub user_id: &'a str,
-    pub code: &'a str
+    pub code: &'a str,
 }

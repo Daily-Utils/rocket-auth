@@ -4,15 +4,15 @@ mod schema;
 mod test;
 mod utils;
 
+use crate::controllers::auth::signin::sign_in::sign_in;
+use crate::controllers::auth::signup::create_user::create_user;
 use crate::controllers::client::create_client::create_client;
-use crate::controllers::signin::sign_in::sign_in;
-use crate::controllers::signup::create_user::create_user;
 use crate::controllers::tenant::refresh_tenant_key::refresh_tenant;
+use crate::utils::config::AppConfig;
 use crate::utils::connect_sql::establish_connection;
 use controllers::tenant::create_tenant::create_tenant;
 use rocket::{get, launch, routes};
 use utils::config::Config;
-use crate::utils::config::AppConfig;
 
 #[get("/")]
 fn hello() -> String {

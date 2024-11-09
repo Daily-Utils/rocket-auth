@@ -1,5 +1,7 @@
 use super::checks::{check_and_process_tokens, check_client_exists, check_pass};
 use super::generate_token::generate_token;
+use super::models::SignInResponse;
+use super::models::SignInUser;
 use crate::models::access_token::NewAccessToken;
 use crate::models::refresh_token::NewRefreshToken;
 use crate::models::user::User;
@@ -16,27 +18,12 @@ use rocket::http::Status;
 use rocket::post;
 use rocket::response::status;
 use rocket::serde::json::Json;
-use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize)]
-
-pub struct SignInUser<'a> {
-    email: &'a str,
-    password: &'a str,
-    client_id: &'a str,
-}
-
-#[derive(Serialize)]
-pub struct SignInResponse {
-    action: String,
-    access_token: String,
-}
 
 #[post("/signin", data = "<sign_in_user>")]
 pub async fn sign_in<'a>(
     sign_in_user: Json<SignInUser<'a>>,
 ) -> Result<Json<SignInResponse>, status::Custom<&str>> {
-    let required_vars = vec!["USER_ENCRYPTION_KEY", "ID_SIZE", "ROCKET_SECRET"];
+    let required_vars: Vec<&str> = vec!["USER_ENCRYPTION_KEY", "ID_SIZE", "ROCKET_SECRET"];
     if !AppConfig::check_vars(required_vars) {
         return Err(status::Custom(
             Status::InternalServerError,
@@ -46,9 +33,9 @@ pub async fn sign_in<'a>(
 
     let mut conn: diesel_async::AsyncMysqlConnection = establish_connection().await.unwrap();
 
-    let user_key = AppConfig::get_var("USER_ENCRYPTION_KEY");
-    let size = AppConfig::get_var("ID_SIZE");
-    let secret = AppConfig::get_var("ROCKET_SECRET");
+    let user_key: String = AppConfig::get_var("USER_ENCRYPTION_KEY");
+    let size: String = AppConfig::get_var("ID_SIZE");
+    let secret: String = AppConfig::get_var("ROCKET_SECRET");
 
     let user_exists: Result<User, _> = user
         .filter(email.eq(sign_in_user.email))
@@ -57,7 +44,7 @@ pub async fn sign_in<'a>(
 
     match user_exists {
         Ok(user_taken) => {
-            let pass_match = check_pass(
+            let pass_match: Result<bool, diesel::result::Error> = check_pass(
                 sign_in_user.password,
                 &user_taken.password,
                 &user_key.clone(),
@@ -80,7 +67,8 @@ pub async fn sign_in<'a>(
                 }
             }
 
-            let client_exists = check_client_exists(sign_in_user.client_id, &mut conn).await;
+            let client_exists: Result<bool, diesel::result::Error> =
+                check_client_exists(sign_in_user.client_id, &mut conn).await;
 
             match client_exists {
                 Ok(true) => (),
@@ -116,7 +104,14 @@ pub async fn sign_in<'a>(
             .await;
 
             match access_token_exists_proccessed {
-                Ok(_) => (),
+                Ok(check_response) => {
+                    if check_response.success == true {
+                        return Ok(Json(SignInResponse {
+                            action: "Sign In".to_string(),
+                            access_token: check_response.token,
+                        }));
+                    }
+                }
                 Err(e) => {
                     error!("Error checking access token existence: {}", e);
                     return Err(status::Custom(

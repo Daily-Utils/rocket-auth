@@ -1,7 +1,7 @@
-use crate::schema::user::dsl::user;
 use crate::schema::client::dsl::client;
-use diesel::prelude::*;
 use crate::schema::refresh_token;
+use crate::schema::user::dsl::user;
+use diesel::prelude::*;
 
 #[derive(Queryable, Associations, Identifiable, Debug)]
 #[diesel(belongs_to(user))]
@@ -23,5 +23,5 @@ pub struct NewRefreshToken<'a> {
     pub user_id: &'a str,
     pub client_id: &'a str,
     pub token: &'a str,
-    pub expires_at: chrono::NaiveDateTime
+    pub expires_at: chrono::NaiveDateTime,
 }

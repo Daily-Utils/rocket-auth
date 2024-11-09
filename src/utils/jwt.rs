@@ -31,7 +31,8 @@ pub fn sign_jwt(secret: &str, claims: Claims) -> Result<String, Box<dyn Error>> 
 pub fn verify_jwt(secret: &str, token_str: &str) -> Result<Claims, Box<dyn Error>> {
     let key: Hmac<Sha384> = Hmac::new_from_slice(secret.as_bytes())?;
 
-    let token: Token<Header, BTreeMap<String, serde_json::Value>, _> = Token::parse_unverified(token_str)?;
+    let token: Token<Header, BTreeMap<String, serde_json::Value>, _> =
+        Token::parse_unverified(token_str)?;
     let verified_token: Token<Header, BTreeMap<String, serde_json::Value>, jwt::Verified> =
         token.verify_with_key(&key)?;
 
