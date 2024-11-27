@@ -3,7 +3,7 @@ pub struct NewTenantCreate<'a> {
     pub name: &'a str,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateTenantResponse {
     pub action: String,
     pub tenant_key: String,
