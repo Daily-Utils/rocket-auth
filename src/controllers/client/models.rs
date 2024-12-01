@@ -6,7 +6,7 @@ pub struct NewClientCreate<'a> {
     pub redirect_uri: &'a str,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CreateClientResponse {
     pub action: String,
     pub tenant_key_refresher_hash: String,

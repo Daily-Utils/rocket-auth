@@ -44,6 +44,10 @@ generate-migration:
     sleep 5
     diesel migration run
 
+only-generate-migration:
+    @echo "Generating migration"
+    diesel migration run
+
 run-compose:
     @echo "Running docker compose"
     docker compose -f docker-compose.yaml up -d
