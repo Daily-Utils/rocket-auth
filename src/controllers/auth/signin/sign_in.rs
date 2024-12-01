@@ -53,10 +53,10 @@ pub async fn sign_in<'a>(
             match pass_match {
                 Ok(true) => (),
                 Ok(false) => {
-                    return Ok(Json(SignInResponse {
-                        action: "Password does not match".to_string(),
-                        access_token: "".to_string(),
-                    }));
+                    return Err(status::Custom(
+                        rocket::http::Status::BadRequest,
+                        "Password does not match",
+                    ));
                 }
                 Err(e) => {
                     error!("Error checking password: {}", e);
@@ -73,10 +73,10 @@ pub async fn sign_in<'a>(
             match client_exists {
                 Ok(true) => (),
                 Ok(false) => {
-                    return Ok(Json(SignInResponse {
-                        action: "Client does not exist".to_string(),
-                        access_token: "".to_string(),
-                    }));
+                    return Err(status::Custom(
+                        rocket::http::Status::BadRequest,
+                        "Client does not exist",
+                    ));
                 }
                 Err(_) => {
                     error!("Error checking client existence");
