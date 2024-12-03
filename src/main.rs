@@ -3,6 +3,7 @@ mod models;
 mod schema;
 mod test;
 mod utils;
+mod middlewares;
 
 use crate::controllers::auth::signin::sign_in::sign_in;
 use crate::controllers::auth::signup::create_user::create_user;
