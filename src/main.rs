@@ -1,12 +1,13 @@
 mod controllers;
+mod middlewares;
 mod models;
 mod schema;
 mod test;
 mod utils;
-mod middlewares;
 
 use crate::controllers::auth::signin::sign_in::sign_in;
 use crate::controllers::auth::signup::create_user::create_user;
+use crate::controllers::auth::verify::verify::verify;
 use crate::controllers::client::create_client::create_client;
 use crate::controllers::tenant::refresh_tenant_key::refresh_tenant;
 use crate::utils::config::AppConfig;
@@ -32,4 +33,5 @@ async fn rocket() -> _ {
         .mount("/api/tenant", routes![create_tenant, refresh_tenant])
         .mount("/api/client", routes![create_client])
         .mount("/api/user", routes![create_user, sign_in])
+        .mount("/api/verify", routes![verify])
 }
