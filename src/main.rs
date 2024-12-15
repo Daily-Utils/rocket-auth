@@ -33,5 +33,5 @@ async fn rocket() -> _ {
         .mount("/api/tenant", routes![create_tenant, refresh_tenant])
         .mount("/api/client", routes![create_client])
         .mount("/api/user", routes![create_user, sign_in])
-        .mount("/api/verify", routes![verify])
+        .mount("/api/", routes![verify])
 }

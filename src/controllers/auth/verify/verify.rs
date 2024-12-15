@@ -7,8 +7,8 @@ use super::models::VerificationResponse;
 pub fn verify(
     _auth: VerifyAuthRoles,
 ) -> Result<Json<VerificationResponse>, status::Custom<String>> {
+    println!("{}", _auth.is_jwt_valid);
     if _auth.is_jwt_valid == true {
-        // TODO: Add checks for role
         return Ok(Json(VerificationResponse {
             message: "verification successfull".to_string(),
             status: 200,
