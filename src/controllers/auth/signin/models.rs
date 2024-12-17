@@ -7,7 +7,7 @@ pub struct SignInUser<'a> {
     pub client_id: &'a str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SignInResponse {
     pub action: String,
     pub access_token: String,

@@ -22,7 +22,7 @@ use rocket::serde::json::Json;
 #[post("/signin", data = "<sign_in_user>")]
 pub async fn sign_in<'a>(
     sign_in_user: Json<SignInUser<'a>>,
-) -> Result<Json<SignInResponse>, status::Custom<&str>> {
+) -> Result<Json<SignInResponse>, status::Custom<&'a str>> {
     let required_vars: Vec<&str> = vec!["USER_ENCRYPTION_KEY", "ID_SIZE", "ROCKET_SECRET"];
     if !AppConfig::check_vars(required_vars) {
         return Err(status::Custom(

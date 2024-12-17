@@ -22,7 +22,7 @@ use crate::schema::client::dsl::id;
 #[post("/refreshTenantKey", data = "<refresh_token>")]
 pub async fn refresh_tenant<'a>(
     refresh_token: Json<RefreshRequest<'a>>,
-) -> Result<Json<RefreshTenantKeyResponse>, status::Custom<&str>> {
+) -> Result<Json<RefreshTenantKeyResponse>, status::Custom<&'a str>> {
     let required_vars = vec!["CLIENT_ENCRYPTION_KEY"];
     if !AppConfig::check_vars(required_vars) {
         return Err(status::Custom(
